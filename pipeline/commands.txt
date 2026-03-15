@@ -1,0 +1,124 @@
+docker compose up -d
+docker exec -it datathon_postgres psql -U datathon_user -d datathon_db
+python -m pipeline.scheduler
+SELECT asin, price, timestamp
+FROM price_snapshots
+ORDER BY timestamp DESC
+LIMIT 10;
+
+SELECT asin, embedding IS NOT NULL
+FROM products;
+
+SELECT asin, rating, review_count
+FROM rating_snapshots
+LIMIT 10;
+
+
+
+
+Here's the exact sequence of commands to run everything:
+
+Step 1 — Activate virtual environment
+bashcd DATATHON
+source line/bin/activate        # Linux/Mac
+# OR
+line\Scripts\activate           # Windows
+
+Step 2 — Install dependencies
+pip install -r requirements.txt
+
+Step 3 — Start Docker (PostgreSQL + Redis)
+docker compose up -d
+Verify both containers are running:
+docker ps
+You should see datathon_postgres and datathon_redis both with status healthy.
+
+Step 4 — Verify DB connection
+docker exec -it datathon_postgres psql -U datathon_user -d datathon_db -c "\dt"
+If it says No relations found — that's fine, tables get created in the next step.
+
+Step 5 — Seed the database
+python seed_mock_data.py
+```
+Expected output:
+```
+Syncing DB schema...
+[DB] Schema synced.
+Seeding own products...
+  ✓ Seeded B0F8BVSK21 (boAt Airdopes 141 Gen 2...)
+Seeding competitor products...
+  ✓ Seeded B0D9R4GYTN (Sony WF-C510...)
+  ✓ Seeded B0DHL8XLX5 (JBL Wave Flex 2...)
+  ✓ Seeded B09Y5MK1KB (Noise Buds VS104...)
+  ✓ Seeded B0DZCRYG7R (Competitor TWS...)
+Seeding seller metrics...
+  ✓ Seeded 30 days seller metrics for B0F8BVSK21
+✓ Seed complete!
+
+Step 6 — Verify data in DB
+docker exec -it datathon_postgres psql -U datathon_user -d datathon_db -c "
+SELECT table_name, (SELECT COUNT(*) FROM information_schema.tables t2 WHERE t2.table_name = t.table_name) 
+FROM information_schema.tables t 
+WHERE table_schema = 'public';
+"
+Or check row counts directly:
+docker exec -it datathon_postgres psql -U datathon_user -d datathon_db -c "
+SELECT 'products' AS tbl, COUNT(*) FROM products
+UNION ALL SELECT 'price_snapshots', COUNT(*) FROM price_snapshots
+UNION ALL SELECT 'rating_snapshots', COUNT(*) FROM rating_snapshots
+UNION ALL SELECT 'reviews', COUNT(*) FROM reviews
+UNION ALL SELECT 'seller_metrics', COUNT(*) FROM seller_metrics;
+"
+```
+
+Expected:
+```
+products        |  5
+price_snapshots | 120
+rating_snapshots| 120
+reviews         |  50
+seller_metrics  |  30
+
+Step 7 — Run the live scraper (one shot, no scheduler)
+To test scraping works before committing to the scheduler:
+python -c "
+from pipeline.db.database import engine
+from pipeline.db.models import ensure_schema
+from pipeline.scheduler import run_competitor_pipeline, run_seller_pipeline
+ensure_schema(engine)
+run_seller_pipeline()
+run_competitor_pipeline()
+"
+Watch the output — you should see prices and ratings coming in live from Amazon.
+
+Step 8 — Generate embeddings
+python -c "
+from pipeline.competitors.embedding_service import embed_all_missing
+embed_all_missing()
+"
+
+⚠️ Requires OPENAI_API_KEY in .env. Skip this if you don't have one yet — everything else still works.
+
+
+Step 9 — Run competitor detection
+python -c "
+from pipeline.competitors.similarity_search import detect_all_competitors
+detect_all_competitors()
+"
+
+Only works after Step 8 (needs embeddings). Check results:
+
+docker exec -it datathon_postgres psql -U datathon_user -d datathon_db -c "SELECT * FROM competitors;"
+
+Step 10 — Start the full scheduler
+Once everything above is verified, start the recurring pipeline:
+python -m pipeline.scheduler
+This will:
+
+Sync schema
+Run the full pipeline immediately
+Then repeat every 3 hours automatically
+
+Press Ctrl+C to stop.
+
+

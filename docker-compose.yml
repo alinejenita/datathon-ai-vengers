@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: datathon_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: datathon_user
+      POSTGRES_PASSWORD: datathon_pass
+      POSTGRES_DB: datathon_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datathon_user -d datathon_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: datathon_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
