@@ -2,14 +2,14 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
-def call_openai(system_prompt, user_prompt, model="gpt-4o", max_tokens=1000):
+def call_groq(system_prompt, user_prompt, model="llama-3.3-70b-versatile", max_tokens=1000):
     try:
         load_dotenv(override=True)
-        API_KEY = os.getenv("OPENAI_API_KEY")
+        API_KEY = os.getenv("GROQ_API_KEY")
         if not API_KEY:
-            return {"error": "OPENAI_API_KEY not found in .env"}
+            return {"error": "GROQ_API_KEY not found in .env"}
             
-        client = OpenAI(api_key=API_KEY)
+        client = OpenAI(api_key=API_KEY, base_url="https://api.groq.com/openai/v1")
         
         response = client.chat.completions.create(
             model=model,

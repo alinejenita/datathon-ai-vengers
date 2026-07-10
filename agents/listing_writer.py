@@ -1,13 +1,20 @@
 print("LISTING WRITER STARTED")
 import json
 from agents.gap_finder import run_gap_finder_agent
-from agents.claude_client import call_claude
+from agents.ai_client import call_ai_simple
 
 def rewrite_listing(title, bullets, gaps, max_bullets=5):
     if not title:
         title = "High-performing product listing"
 
-    gap_descriptions = [g.get("gap", "") for g in gaps[:5] if g.get("gap")]
+    gap_descriptions = []
+    for g in gaps[:5]:
+        if isinstance(g, dict):
+            gap_text = g.get("gap", "")
+        else:
+            gap_text = str(g)
+        if gap_text:
+            gap_descriptions.append(gap_text)
 
     system_prompt = (
         "You are an expert Amazon listing copywriter. "
@@ -25,21 +32,18 @@ def rewrite_listing(title, bullets, gaps, max_bullets=5):
         "Rewrite the listing. Make bullets specific and benefit-driven."
     )
 
-    response = call_claude(system_prompt, user_prompt, max_tokens=500)
-
-    if "error" not in response:
-        try:
-            text = response["message"].strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            parsed = json.loads(text.strip())
-            if "title" in parsed and "bullets" in parsed:
-                parsed["bullets"] = parsed["bullets"][:max_bullets]
-                return parsed
-        except Exception:
-            pass
+    try:
+        text = call_ai_simple(system_prompt, user_prompt, max_tokens=500)
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = json.loads(text.strip())
+        if "title" in parsed and "bullets" in parsed:
+            parsed["bullets"] = parsed["bullets"][:max_bullets]
+            return parsed
+    except Exception:
+        pass
 
     # Fallback
     gap_lines = gap_descriptions[:3]

@@ -1,6 +1,6 @@
 print("STRATEGY ORCHESTRATOR STARTED")
 import json
-from agents.claude_client import call_claude
+from agents.ai_client import call_ai_simple
 
 def compute_competitor_health(pricing_events, sentiment_summary, gaps):
     score = 70
@@ -53,22 +53,19 @@ def generate_strategy_cards(pricing_events, sentiment_summary, gaps, seller_metr
         "Generate exactly 3 ranked strategy cards based on these signals."
     )
 
-    response = call_claude(system_prompt, user_prompt, max_tokens=800)
-
-    if "error" not in response:
-        try:
-            text = response["message"].strip()
-            # Strip markdown fences if Claude adds them despite instructions
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            parsed = json.loads(text.strip())
-            if "strategies" in parsed and len(parsed["strategies"]) == 3:
-                parsed["competitor_health_score"] = health_score
-                return parsed
-        except Exception:
-            pass
+    try:
+        text = call_ai_simple(system_prompt, user_prompt, max_tokens=800)
+        # Strip markdown fences if AI adds them despite instructions
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = json.loads(text.strip())
+        if "strategies" in parsed and len(parsed["strategies"]) == 3:
+            parsed["competitor_health_score"] = health_score
+            return parsed
+    except Exception:
+        pass
 
     # Fallback — always returns 3 cards
     return {

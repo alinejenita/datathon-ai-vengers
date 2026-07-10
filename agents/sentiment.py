@@ -3,7 +3,7 @@ import json
 from collections import Counter, defaultdict
 from sqlalchemy import text
 from agents.db import SessionLocal
-from agents.claude_client import call_claude
+from agents.ai_client import call_ai_simple
 
 VALID_CATEGORIES = {"durability", "shipping", "quality", "packaging", "value", "size", "other"}
 
@@ -24,27 +24,7 @@ def classify_review_with_rules(text):
     return "other"
 
 def classify_review(review_text):
-    system_prompt = (
-        "You are an e-commerce review analyst. "
-        "Classify the review into exactly one category: "
-        "durability, shipping, quality, packaging, value, size, or other. "
-        "Respond with ONLY valid JSON: {\"category\": \"<one of the above>\"}. "
-        "No explanation, no markdown, no extra text."
-    )
-    user_prompt = f"Review: {review_text}"
-    response = call_claude(system_prompt, user_prompt, max_tokens=60)
-
-    if "error" in response:
-        return classify_review_with_rules(review_text)
-
-    try:
-        parsed = json.loads(response["message"])
-        cat = parsed.get("category", "").strip().lower()
-        if cat in VALID_CATEGORIES:
-            return cat
-    except Exception:
-        pass
-
+    # Use rules-based classification first for speed and reliability
     return classify_review_with_rules(review_text)
 
 def run_sentiment_agent(batch_limit=300):
